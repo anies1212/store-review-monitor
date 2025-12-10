@@ -21,7 +21,7 @@ Monitor App Store Connect and Google Play Console review status with Slack notif
 | Platform | Directory | Language |
 |----------|-----------|----------|
 | GitHub Actions | `/` (root) | TypeScript |
-| Bitrise | `/bitrise-step-store-review-monitor` | Go |
+| Bitrise | [separate repo](https://github.com/anies1212/bitrise-step-store-review-monitor) | Go |
 
 ---
 
@@ -212,7 +212,7 @@ To persist version cache between builds, add cache steps:
 ```yaml
 - cache-pull@2: {}
 
-- git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+- git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@1.0.0:
     inputs:
       # ... your inputs
 
@@ -237,7 +237,7 @@ workflows:
     steps:
       - cache-pull@2: {}
 
-      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@1.0.0:
           title: Monitor App Store Reviews
           inputs:
             - app_store_issuer_id: $APP_STORE_ISSUER_ID
@@ -263,7 +263,7 @@ workflows:
     steps:
       - cache-pull@2: {}
 
-      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@1.0.0:
           title: Monitor Google Play Reviews
           inputs:
             - google_play_package_name: $GOOGLE_PLAY_PACKAGE_NAME
@@ -287,7 +287,7 @@ workflows:
     steps:
       - cache-pull@2: {}
 
-      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@1.0.0:
           title: Monitor All Store Reviews
           inputs:
             # App Store Connect
@@ -321,7 +321,7 @@ workflows:
     steps:
       - cache-pull@2: {}
 
-      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@1.0.0:
           title: Monitor Store Reviews
           inputs:
             - app_store_issuer_id: $APP_STORE_ISSUER_ID
