@@ -12,18 +12,139 @@ A Bitrise Step that monitors App Store Connect and Google Play Console review st
 - Notify on version/build changes
 - Notify on rejection recovery
 
-## Usage
+## Inputs
 
-### Basic Setup
+### App Store Connect
 
-Add to your `bitrise.yml`:
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `app_store_issuer_id` | Yes* | App Store Connect API Issuer ID |
+| `app_store_key_id` | Yes* | App Store Connect API Key ID |
+| `app_store_private_key` | Yes* | App Store Connect API Private Key (base64 or raw .p8) |
+| `app_store_app_id` | Yes* | App Store App ID |
+
+\* Required for App Store monitoring (all 4 parameters must be provided together)
+
+### Google Play
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `google_play_package_name` | Yes** | Android package name (e.g., com.example.app) |
+| `google_play_service_account` | Yes** | Service Account JSON (base64 or raw JSON) |
+
+\*\* Required for Google Play monitoring (both parameters must be provided together)
+
+### Slack
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `slack_webhook_url` | Yes*** | Slack Incoming Webhook URL |
+| `slack_bot_token` | Yes*** | Slack Bot Token (xoxb-...) |
+| `slack_channel` | Yes**** | Slack channel ID or name |
+| `slack_language` | No | Notification language (`en` or `ja`, default: `en`) |
+| `slack_mentions` | No | User IDs to mention (comma-separated) |
+
+\*\*\* Either `slack_webhook_url` or `slack_bot_token` is required
+\*\*\*\* Required when using `slack_bot_token`
+
+### Other
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `cache_path` | No | Cache file path |
+
+## Outputs
+
+| Parameter | Description |
+|-----------|-------------|
+| `STORE_REVIEW_APP_STORE_STATUS` | Current App Store review status |
+| `STORE_REVIEW_GOOGLE_PLAY_STATUS` | Current Google Play review status |
+| `STORE_REVIEW_NOTIFICATION_SENT` | Whether a notification was sent (`true`/`false`) |
+
+## Cache Configuration (Important)
+
+To persist version cache between builds, add cache steps to your workflow:
 
 ```yaml
+- cache-pull@2: {}
+
+- git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+    inputs:
+      # ... your inputs
+
+- cache-push@2:
+    inputs:
+      - cache_paths: |
+          $BITRISE_CACHE_DIR/store-review-versions.json
+```
+
+**Note**: Without cache configuration, notifications will be sent on every run.
+
+## Examples
+
+### Example 1: Monitor App Store Only
+
+```yaml
+format_version: "11"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
 workflows:
-  monitor:
+  monitor-appstore:
     steps:
+      - cache-pull@2: {}
+
       - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
-          title: Monitor Store Reviews
+          title: Monitor App Store Reviews
+          inputs:
+            - app_store_issuer_id: $APP_STORE_ISSUER_ID
+            - app_store_key_id: $APP_STORE_KEY_ID
+            - app_store_private_key: $APP_STORE_PRIVATE_KEY
+            - app_store_app_id: $APP_STORE_APP_ID
+            - slack_webhook_url: $SLACK_WEBHOOK_URL
+
+      - cache-push@2:
+          inputs:
+            - cache_paths: |
+                $BITRISE_CACHE_DIR/store-review-versions.json
+```
+
+### Example 2: Monitor Google Play Only
+
+```yaml
+format_version: "11"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+workflows:
+  monitor-googleplay:
+    steps:
+      - cache-pull@2: {}
+
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+          title: Monitor Google Play Reviews
+          inputs:
+            - google_play_package_name: $GOOGLE_PLAY_PACKAGE_NAME
+            - google_play_service_account: $GOOGLE_PLAY_SERVICE_ACCOUNT
+            - slack_webhook_url: $SLACK_WEBHOOK_URL
+
+      - cache-push@2:
+          inputs:
+            - cache_paths: |
+                $BITRISE_CACHE_DIR/store-review-versions.json
+```
+
+### Example 3: Monitor Both Stores with Bot Token and Mentions
+
+```yaml
+format_version: "11"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+workflows:
+  monitor-all:
+    steps:
+      - cache-pull@2: {}
+
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+          title: Monitor All Store Reviews
           inputs:
             # App Store Connect
             - app_store_issuer_id: $APP_STORE_ISSUER_ID
@@ -33,12 +154,62 @@ workflows:
             # Google Play
             - google_play_package_name: $GOOGLE_PLAY_PACKAGE_NAME
             - google_play_service_account: $GOOGLE_PLAY_SERVICE_ACCOUNT
-            # Slack
-            - slack_webhook_url: $SLACK_WEBHOOK_URL
+            # Slack (using Bot Token)
+            - slack_bot_token: $SLACK_BOT_TOKEN
+            - slack_channel: "#app-releases"
+            - slack_mentions: "U1234567890,U0987654321"
             - slack_language: "en"
+
+      - cache-push@2:
+          inputs:
+            - cache_paths: |
+                $BITRISE_CACHE_DIR/store-review-versions.json
 ```
 
-### Scheduled Builds
+### Example 4: Using Outputs for Conditional Steps
+
+```yaml
+format_version: "11"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+workflows:
+  monitor-with-conditions:
+    steps:
+      - cache-pull@2: {}
+
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+          title: Monitor Store Reviews
+          inputs:
+            - app_store_issuer_id: $APP_STORE_ISSUER_ID
+            - app_store_key_id: $APP_STORE_KEY_ID
+            - app_store_private_key: $APP_STORE_PRIVATE_KEY
+            - app_store_app_id: $APP_STORE_APP_ID
+            - slack_webhook_url: $SLACK_WEBHOOK_URL
+
+      - script@1:
+          title: Log Results
+          inputs:
+            - content: |
+                #!/bin/bash
+                echo "App Store Status: $STORE_REVIEW_APP_STORE_STATUS"
+                echo "Notification Sent: $STORE_REVIEW_NOTIFICATION_SENT"
+
+      - script@1:
+          title: Handle Rejection
+          run_if: '{{enveq "STORE_REVIEW_APP_STORE_STATUS" "REJECTED"}}'
+          inputs:
+            - content: |
+                #!/bin/bash
+                echo "App was rejected! Taking action..."
+                # Add your rejection handling logic here
+
+      - cache-push@2:
+          inputs:
+            - cache_paths: |
+                $BITRISE_CACHE_DIR/store-review-versions.json
+```
+
+## Scheduled Builds
 
 Use Bitrise Scheduled Builds for periodic monitoring:
 
@@ -46,74 +217,6 @@ Use Bitrise Scheduled Builds for periodic monitoring:
 2. Open **Settings** > **Triggers**
 3. Add a new schedule in the **Scheduled** tab
 4. Set the interval (e.g., every 6 hours) and workflow
-
-### Cache Configuration (Important)
-
-To persist version cache between builds, add cache steps to your workflow:
-
-```yaml
-workflows:
-  monitor:
-    steps:
-      # Pull cache at the start
-      - cache-pull@2: {}
-
-      # Monitor step
-      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
-          inputs:
-            - app_store_issuer_id: $APP_STORE_ISSUER_ID
-            # ... other inputs
-
-      # Push cache at the end
-      - cache-push@2:
-          inputs:
-            - cache_paths: |
-                $BITRISE_CACHE_DIR/store-review-versions.json
-```
-
-**Note**: Without cache configuration, notifications will be sent on every run.
-
-## Inputs
-
-### App Store Connect
-
-| Parameter | Description | Required |
-|-----------|-------------|----------|
-| `app_store_issuer_id` | App Store Connect API Issuer ID | No |
-| `app_store_key_id` | App Store Connect API Key ID | No |
-| `app_store_private_key` | App Store Connect API Private Key (base64 or raw .p8) | No |
-| `app_store_app_id` | App Store App ID | No |
-
-### Google Play
-
-| Parameter | Description | Required |
-|-----------|-------------|----------|
-| `google_play_package_name` | Android package name (e.g., com.example.app) | No |
-| `google_play_service_account` | Service Account JSON (base64 or raw JSON) | No |
-
-### Slack
-
-| Parameter | Description | Required |
-|-----------|-------------|----------|
-| `slack_webhook_url` | Slack Incoming Webhook URL | Either webhook or bot_token |
-| `slack_bot_token` | Slack Bot Token (xoxb-...) | Either webhook or bot_token |
-| `slack_channel` | Slack channel ID or name | Required with bot_token |
-| `slack_language` | Notification language (`en` or `ja`) | No (default: `en`) |
-| `slack_mentions` | User IDs to mention (comma-separated) | No |
-
-### Other
-
-| Parameter | Description | Required |
-|-----------|-------------|----------|
-| `cache_path` | Cache file path | No |
-
-## Outputs
-
-| Parameter | Description |
-|-----------|-------------|
-| `STORE_REVIEW_APP_STORE_STATUS` | Current App Store review status |
-| `STORE_REVIEW_GOOGLE_PLAY_STATUS` | Current Google Play review status |
-| `STORE_REVIEW_NOTIFICATION_SENT` | Whether a notification was sent (`true`/`false`) |
 
 ## Setup
 
@@ -169,42 +272,6 @@ Notifications are sent for these statuses:
 ### On Rejection Recovery
 
 Notifications are sent when the app recovers from a rejected state to an approved state, even with the same version/build.
-
-## Example Workflows
-
-### Monitor App Store Only
-
-```yaml
-workflows:
-  monitor_ios:
-    steps:
-      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
-          inputs:
-            - app_store_issuer_id: $APP_STORE_ISSUER_ID
-            - app_store_key_id: $APP_STORE_KEY_ID
-            - app_store_private_key: $APP_STORE_PRIVATE_KEY
-            - app_store_app_id: $APP_STORE_APP_ID
-            - slack_webhook_url: $SLACK_WEBHOOK_URL
-            - slack_language: "en"
-```
-
-### With Bot Token and Mentions
-
-```yaml
-workflows:
-  monitor_with_mentions:
-    steps:
-      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
-          inputs:
-            - app_store_issuer_id: $APP_STORE_ISSUER_ID
-            - app_store_key_id: $APP_STORE_KEY_ID
-            - app_store_private_key: $APP_STORE_PRIVATE_KEY
-            - app_store_app_id: $APP_STORE_APP_ID
-            - slack_bot_token: $SLACK_BOT_TOKEN
-            - slack_channel: "#app-releases"
-            - slack_mentions: "U1234567890,U0987654321"
-            - slack_language: "en"
-```
 
 ## Local Testing
 

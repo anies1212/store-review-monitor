@@ -27,16 +27,91 @@ Monitor App Store Connect and Google Play Console review status with Slack notif
 
 ## GitHub Actions
 
-### Basic Setup
+### Inputs
 
-Create `.github/workflows/monitor-review.yml`:
+| Input | Required | Description |
+|-------|----------|-------------|
+| `app-store-issuer-id` | Yes* | App Store Connect API Issuer ID |
+| `app-store-key-id` | Yes* | App Store Connect API Key ID |
+| `app-store-private-key` | Yes* | App Store Connect API Private Key (base64 or raw .p8) |
+| `app-store-app-id` | Yes* | App Store Connect App ID |
+| `google-play-package-name` | Yes** | Google Play package name (e.g., com.example.app) |
+| `google-play-service-account` | Yes** | Google Play Service Account JSON (base64 or raw JSON) |
+| `slack-webhook-url` | Yes*** | Slack Webhook URL |
+| `slack-bot-token` | Yes*** | Slack Bot Token (xoxb-...) |
+| `slack-channel` | Yes**** | Slack channel ID or name |
+| `slack-language` | No | Language (`en` or `ja`, default: `en`) |
+| `slack-mentions` | No | Slack user IDs to mention (comma-separated) |
+
+\* Required for App Store monitoring (all 4 parameters must be provided together)
+\*\* Required for Google Play monitoring (both parameters must be provided together)
+\*\*\* Either `slack-webhook-url` or `slack-bot-token` is required
+\*\*\*\* Required when using `slack-bot-token`
+
+### Outputs
+
+| Output | Description |
+|--------|-------------|
+| `app-store-status` | Current App Store review status |
+| `google-play-status` | Current Google Play review status |
+| `notification-sent` | Whether a notification was sent |
+
+### Examples
+
+#### Example 1: Monitor App Store Only
 
 ```yaml
-name: Monitor Store Review Status
+name: Monitor App Store Review
 
 on:
   schedule:
     - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Monitor App Store
+        uses: anies1212/store-review-monitor@v1
+        with:
+          app-store-issuer-id: ${{ secrets.APP_STORE_ISSUER_ID }}
+          app-store-key-id: ${{ secrets.APP_STORE_KEY_ID }}
+          app-store-private-key: ${{ secrets.APP_STORE_PRIVATE_KEY }}
+          app-store-app-id: ${{ secrets.APP_STORE_APP_ID }}
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+#### Example 2: Monitor Google Play Only
+
+```yaml
+name: Monitor Google Play Review
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Monitor Google Play
+        uses: anies1212/store-review-monitor@v1
+        with:
+          google-play-package-name: com.example.myapp
+          google-play-service-account: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+#### Example 3: Monitor Both Stores with Bot Token and Mentions
+
+```yaml
+name: Monitor All Store Reviews
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'  # Every 4 hours
   workflow_dispatch:
 
 jobs:
@@ -52,54 +127,168 @@ jobs:
           app-store-private-key: ${{ secrets.APP_STORE_PRIVATE_KEY }}
           app-store-app-id: ${{ secrets.APP_STORE_APP_ID }}
           # Google Play
-          google-play-package-name: 'com.example.app'
+          google-play-package-name: com.example.myapp
           google-play-service-account: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT }}
-          # Slack
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-          slack-language: 'en'
+          # Slack (using Bot Token)
+          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack-channel: C1234567890
+          slack-mentions: U1234567890,U0987654321
+          slack-language: en
 ```
 
-### GitHub Actions Inputs
+#### Example 4: Using Outputs for Conditional Steps
 
-| Input | Required | Description |
-|-------|----------|-------------|
-| `app-store-issuer-id` | No | App Store Connect API Issuer ID |
-| `app-store-key-id` | No | App Store Connect API Key ID |
-| `app-store-private-key` | No | App Store Connect API Private Key |
-| `app-store-app-id` | No | App Store Connect App ID |
-| `google-play-package-name` | No | Google Play package name |
-| `google-play-service-account` | No | Google Play Service Account JSON |
-| `slack-webhook-url` | No* | Slack Webhook URL |
-| `slack-bot-token` | No* | Slack Bot Token (xoxb-...) |
-| `slack-channel` | No** | Slack channel (required with bot-token) |
-| `slack-language` | No | Language (`en` or `ja`, default: `en`) |
-| `slack-mentions` | No | Slack user IDs to mention (comma-separated) |
+```yaml
+name: Monitor with Conditional Steps
 
-\* Either `slack-webhook-url` or `slack-bot-token` is required
-\*\* Required when using `slack-bot-token`
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
-### GitHub Actions Outputs
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Monitor Store Reviews
+        id: monitor
+        uses: anies1212/store-review-monitor@v1
+        with:
+          app-store-issuer-id: ${{ secrets.APP_STORE_ISSUER_ID }}
+          app-store-key-id: ${{ secrets.APP_STORE_KEY_ID }}
+          app-store-private-key: ${{ secrets.APP_STORE_PRIVATE_KEY }}
+          app-store-app-id: ${{ secrets.APP_STORE_APP_ID }}
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-| Output | Description |
-|--------|-------------|
-| `app-store-status` | Current App Store review status |
-| `google-play-status` | Current Google Play review status |
-| `notification-sent` | Whether a notification was sent |
+      - name: Log Results
+        run: |
+          echo "App Store Status: ${{ steps.monitor.outputs.app-store-status }}"
+          echo "Notification Sent: ${{ steps.monitor.outputs.notification-sent }}"
+
+      - name: Additional Action on Rejection
+        if: contains(steps.monitor.outputs.app-store-status, 'REJECTED')
+        run: |
+          echo "App was rejected! Creating issue..."
+          # Add your rejection handling logic here
+```
 
 ---
 
 ## Bitrise
 
-### Basic Setup
+### Inputs
 
-Add to your `bitrise.yml`:
+| Input | Required | Description |
+|-------|----------|-------------|
+| `app_store_issuer_id` | Yes* | App Store Connect API Issuer ID |
+| `app_store_key_id` | Yes* | App Store Connect API Key ID |
+| `app_store_private_key` | Yes* | App Store Connect API Private Key (base64 or raw .p8) |
+| `app_store_app_id` | Yes* | App Store Connect App ID |
+| `google_play_package_name` | Yes** | Google Play package name (e.g., com.example.app) |
+| `google_play_service_account` | Yes** | Google Play Service Account JSON (base64 or raw JSON) |
+| `slack_webhook_url` | Yes*** | Slack Webhook URL |
+| `slack_bot_token` | Yes*** | Slack Bot Token (xoxb-...) |
+| `slack_channel` | Yes**** | Slack channel ID or name |
+| `slack_language` | No | Language (`en` or `ja`, default: `en`) |
+| `slack_mentions` | No | Slack user IDs to mention (comma-separated) |
+
+\* Required for App Store monitoring (all 4 parameters must be provided together)
+\*\* Required for Google Play monitoring (both parameters must be provided together)
+\*\*\* Either `slack_webhook_url` or `slack_bot_token` is required
+\*\*\*\* Required when using `slack_bot_token`
+
+### Outputs
+
+| Output | Description |
+|--------|-------------|
+| `STORE_REVIEW_APP_STORE_STATUS` | Current App Store review status |
+| `STORE_REVIEW_GOOGLE_PLAY_STATUS` | Current Google Play review status |
+| `STORE_REVIEW_NOTIFICATION_SENT` | Whether a notification was sent |
+
+### Cache Configuration (Important)
+
+To persist version cache between builds, add cache steps:
 
 ```yaml
+- cache-pull@2: {}
+
+- git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+    inputs:
+      # ... your inputs
+
+- cache-push@2:
+    inputs:
+      - cache_paths: |
+          $BITRISE_CACHE_DIR/store-review-versions.json
+```
+
+**Note**: Without cache configuration, notifications will be sent on every run.
+
+### Examples
+
+#### Example 1: Monitor App Store Only
+
+```yaml
+format_version: "11"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
 workflows:
-  monitor:
+  monitor-appstore:
     steps:
+      - cache-pull@2: {}
+
       - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
-          title: Monitor Store Reviews
+          title: Monitor App Store Reviews
+          inputs:
+            - app_store_issuer_id: $APP_STORE_ISSUER_ID
+            - app_store_key_id: $APP_STORE_KEY_ID
+            - app_store_private_key: $APP_STORE_PRIVATE_KEY
+            - app_store_app_id: $APP_STORE_APP_ID
+            - slack_webhook_url: $SLACK_WEBHOOK_URL
+
+      - cache-push@2:
+          inputs:
+            - cache_paths: |
+                $BITRISE_CACHE_DIR/store-review-versions.json
+```
+
+#### Example 2: Monitor Google Play Only
+
+```yaml
+format_version: "11"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+workflows:
+  monitor-googleplay:
+    steps:
+      - cache-pull@2: {}
+
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+          title: Monitor Google Play Reviews
+          inputs:
+            - google_play_package_name: $GOOGLE_PLAY_PACKAGE_NAME
+            - google_play_service_account: $GOOGLE_PLAY_SERVICE_ACCOUNT
+            - slack_webhook_url: $SLACK_WEBHOOK_URL
+
+      - cache-push@2:
+          inputs:
+            - cache_paths: |
+                $BITRISE_CACHE_DIR/store-review-versions.json
+```
+
+#### Example 3: Monitor Both Stores with Bot Token and Mentions
+
+```yaml
+format_version: "11"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+workflows:
+  monitor-all:
+    steps:
+      - cache-pull@2: {}
+
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+          title: Monitor All Store Reviews
           inputs:
             # App Store Connect
             - app_store_issuer_id: $APP_STORE_ISSUER_ID
@@ -109,9 +298,59 @@ workflows:
             # Google Play
             - google_play_package_name: $GOOGLE_PLAY_PACKAGE_NAME
             - google_play_service_account: $GOOGLE_PLAY_SERVICE_ACCOUNT
-            # Slack
-            - slack_webhook_url: $SLACK_WEBHOOK_URL
+            # Slack (using Bot Token)
+            - slack_bot_token: $SLACK_BOT_TOKEN
+            - slack_channel: "#app-releases"
+            - slack_mentions: "U1234567890,U0987654321"
             - slack_language: "en"
+
+      - cache-push@2:
+          inputs:
+            - cache_paths: |
+                $BITRISE_CACHE_DIR/store-review-versions.json
+```
+
+#### Example 4: Using Outputs for Conditional Steps
+
+```yaml
+format_version: "11"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+workflows:
+  monitor-with-conditions:
+    steps:
+      - cache-pull@2: {}
+
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
+          title: Monitor Store Reviews
+          inputs:
+            - app_store_issuer_id: $APP_STORE_ISSUER_ID
+            - app_store_key_id: $APP_STORE_KEY_ID
+            - app_store_private_key: $APP_STORE_PRIVATE_KEY
+            - app_store_app_id: $APP_STORE_APP_ID
+            - slack_webhook_url: $SLACK_WEBHOOK_URL
+
+      - script@1:
+          title: Log Results
+          inputs:
+            - content: |
+                #!/bin/bash
+                echo "App Store Status: $STORE_REVIEW_APP_STORE_STATUS"
+                echo "Notification Sent: $STORE_REVIEW_NOTIFICATION_SENT"
+
+      - script@1:
+          title: Handle Rejection
+          run_if: '{{enveq "STORE_REVIEW_APP_STORE_STATUS" "REJECTED"}}'
+          inputs:
+            - content: |
+                #!/bin/bash
+                echo "App was rejected! Taking action..."
+                # Add your rejection handling logic here
+
+      - cache-push@2:
+          inputs:
+            - cache_paths: |
+                $BITRISE_CACHE_DIR/store-review-versions.json
 ```
 
 ### Scheduled Builds on Bitrise
@@ -119,34 +358,7 @@ workflows:
 1. Go to Bitrise Dashboard > Your App
 2. **Settings** > **Triggers**
 3. **Scheduled** tab > Add new schedule
-4. Set interval (e.g., every 6 hours) and workflow
-
-### Bitrise Inputs
-
-| Input | Required | Description |
-|-------|----------|-------------|
-| `app_store_issuer_id` | No | App Store Connect API Issuer ID |
-| `app_store_key_id` | No | App Store Connect API Key ID |
-| `app_store_private_key` | No | App Store Connect API Private Key |
-| `app_store_app_id` | No | App Store Connect App ID |
-| `google_play_package_name` | No | Google Play package name |
-| `google_play_service_account` | No | Google Play Service Account JSON |
-| `slack_webhook_url` | No* | Slack Webhook URL |
-| `slack_bot_token` | No* | Slack Bot Token (xoxb-...) |
-| `slack_channel` | No** | Slack channel (required with bot_token) |
-| `slack_language` | No | Language (`en` or `ja`) |
-| `slack_mentions` | No | Slack user IDs to mention (comma-separated) |
-
-\* Either `slack_webhook_url` or `slack_bot_token` is required
-\*\* Required when using `slack_bot_token`
-
-### Bitrise Outputs
-
-| Output | Description |
-|--------|-------------|
-| `STORE_REVIEW_APP_STORE_STATUS` | Current App Store review status |
-| `STORE_REVIEW_GOOGLE_PLAY_STATUS` | Current Google Play review status |
-| `STORE_REVIEW_NOTIFICATION_SENT` | Whether a notification was sent |
+4. Set interval (e.g., every 6 hours) and select your workflow
 
 ---
 
