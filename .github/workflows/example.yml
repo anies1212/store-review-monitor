@@ -1,0 +1,35 @@
+name: Monitor Store Review Status
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    name: Monitor App Review Status
+    steps:
+      - name: Monitor App Store and Google Play
+        uses: ./
+        id: monitor
+        with:
+          # App Store Connect credentials
+          app-store-issuer-id: ${{ secrets.APP_STORE_ISSUER_ID }}
+          app-store-key-id: ${{ secrets.APP_STORE_KEY_ID }}
+          app-store-private-key: ${{ secrets.APP_STORE_PRIVATE_KEY }}
+          app-store-app-id: ${{ secrets.APP_STORE_APP_ID }}
+
+          # Google Play Console credentials
+          google-play-package-name: ${{ secrets.GOOGLE_PLAY_PACKAGE_NAME }}
+          google-play-service-account: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+
+          # Slack webhook
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Check outputs
+        run: |
+          echo "App Store Status: ${{ steps.monitor.outputs.app-store-status }}"
+          echo "Google Play Status: ${{ steps.monitor.outputs.google-play-status }}"
+          echo "Notification Sent: ${{ steps.monitor.outputs.notification-sent }}"

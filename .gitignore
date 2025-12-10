@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+
+# Build output
+# Note: dist/ should be committed for GitHub Actions
+# dist/
+lib/
+*.js
+!dist/**/*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+coverage/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+.cache/
+
+# ===== Bitrise Step (Go) =====
+# Go build output
+bitrise-step-store-review-monitor/step
+bitrise-step-store-review-monitor/*.exe
+
+# Go dependencies (managed by go mod)
+bitrise-step-store-review-monitor/vendor/
+
+# Go sum file is typically committed, but can be regenerated
+# bitrise-step-store-review-monitor/go.sum

@@ -1,0 +1,174 @@
+title: Store Review Monitor
+summary: Monitor App Store Connect and Google Play Console review status and notify via Slack
+description: |
+  This step monitors the review status of your iOS and Android apps on App Store Connect
+  and Google Play Console, and sends notifications to Slack when the status changes.
+
+  Features:
+  - Monitor App Store Connect review status
+  - Monitor Google Play Console review status
+  - Send Slack notifications on status changes
+  - Support for both Slack Webhook and Bot Token
+  - Multi-language support (English and Japanese)
+  - Smart notification logic to avoid duplicate notifications
+
+website: https://github.com/anies1212/store-review-monitor
+source_code_url: https://github.com/anies1212/store-review-monitor
+support_url: https://github.com/anies1212/store-review-monitor/issues
+
+type_tags:
+  - notification
+  - utility
+
+is_always_run: false
+is_skippable: true
+run_if: ""
+
+toolkit:
+  go:
+    package_name: github.com/anies1212/bitrise-step-store-review-monitor
+
+inputs:
+  # App Store Connect inputs
+  - app_store_issuer_id:
+    opts:
+      title: App Store Connect Issuer ID
+      summary: Your App Store Connect API Issuer ID
+      description: |
+        The Issuer ID from your App Store Connect API key.
+        You can find this in App Store Connect > Users and Access > Keys.
+      is_required: false
+      is_sensitive: true
+
+  - app_store_key_id:
+    opts:
+      title: App Store Connect Key ID
+      summary: Your App Store Connect API Key ID
+      description: |
+        The Key ID from your App Store Connect API key.
+        You can find this in App Store Connect > Users and Access > Keys.
+      is_required: false
+      is_sensitive: true
+
+  - app_store_private_key:
+    opts:
+      title: App Store Connect Private Key
+      summary: Your App Store Connect API Private Key (base64 encoded or raw .p8 content)
+      description: |
+        The private key (.p8 file content) from your App Store Connect API key.
+        Can be either base64 encoded or raw PEM format.
+      is_required: false
+      is_sensitive: true
+
+  - app_store_app_id:
+    opts:
+      title: App Store App ID
+      summary: Your App Store Connect App ID
+      description: |
+        The App ID of your application in App Store Connect.
+        You can find this in App Store Connect > Apps > Your App > App Information.
+      is_required: false
+
+  # Google Play Console inputs
+  - google_play_package_name:
+    opts:
+      title: Google Play Package Name
+      summary: Your Android app package name (e.g., com.example.app)
+      description: |
+        The package name of your Android application.
+      is_required: false
+
+  - google_play_service_account:
+    opts:
+      title: Google Play Service Account JSON
+      summary: Google Play Service Account JSON (base64 encoded or raw JSON)
+      description: |
+        The service account JSON key file content for Google Play Console API access.
+        Can be either base64 encoded or raw JSON.
+      is_required: false
+      is_sensitive: true
+
+  # Slack inputs
+  - slack_webhook_url:
+    opts:
+      title: Slack Webhook URL
+      summary: Slack Incoming Webhook URL for notifications
+      description: |
+        The Slack Incoming Webhook URL for sending notifications.
+        Either this or slack_bot_token is required.
+      is_required: false
+      is_sensitive: true
+
+  - slack_bot_token:
+    opts:
+      title: Slack Bot Token
+      summary: Slack Bot Token (xoxb-...) for notifications
+      description: |
+        The Slack Bot OAuth Token for sending notifications.
+        Either this or slack_webhook_url is required.
+        If using bot token, slack_channel is also required.
+      is_required: false
+      is_sensitive: true
+
+  - slack_channel:
+    opts:
+      title: Slack Channel
+      summary: Slack channel ID or name (required when using slack_bot_token)
+      description: |
+        The Slack channel to send notifications to.
+        Required when using slack_bot_token.
+        Can be a channel ID (C1234567890) or name (#general).
+      is_required: false
+
+  - slack_language:
+    opts:
+      title: Notification Language
+      summary: Language for Slack notifications
+      description: |
+        The language for Slack notification messages.
+        Supported: en (English), ja (Japanese)
+      value_options:
+        - "en"
+        - "ja"
+      is_required: false
+
+  - slack_mentions:
+    opts:
+      title: Slack Mentions
+      summary: Comma-separated list of Slack user IDs to mention
+      description: |
+        Comma-separated list of Slack user IDs to mention in notifications.
+        Example: U1234567890,U0987654321
+      is_required: false
+
+  # Cache inputs
+  - cache_path:
+    opts:
+      title: Cache File Path
+      summary: Path to store version cache file
+      description: |
+        Path to store the version cache file for tracking previous versions.
+        Default: $BITRISE_CACHE_DIR/store-review-versions.json
+      is_required: false
+
+outputs:
+  - STORE_REVIEW_APP_STORE_STATUS:
+    opts:
+      title: App Store Review Status
+      summary: Current App Store review status
+      description: |
+        The current review status of your iOS app on App Store Connect.
+
+  - STORE_REVIEW_GOOGLE_PLAY_STATUS:
+    opts:
+      title: Google Play Review Status
+      summary: Current Google Play review status
+      description: |
+        The current review status of your Android app on Google Play Console.
+
+  - STORE_REVIEW_NOTIFICATION_SENT:
+    opts:
+      title: Notification Sent
+      summary: Whether a notification was sent
+      description: |
+        "true" if a notification was sent, "false" otherwise.

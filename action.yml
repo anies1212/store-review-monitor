@@ -1,0 +1,70 @@
+name: 'Store Review Monitor'
+description: 'Monitor App Store Connect and Google Play Console review status and notify via Slack'
+author: 'Your Name'
+branding:
+  icon: 'smartphone'
+  color: 'blue'
+
+inputs:
+  # App Store Connect inputs
+  app-store-issuer-id:
+    description: 'App Store Connect API Issuer ID'
+    required: false
+  app-store-key-id:
+    description: 'App Store Connect API Key ID'
+    required: false
+  app-store-private-key:
+    description: 'App Store Connect API Private Key (base64 encoded or raw .p8 content)'
+    required: false
+  app-store-app-id:
+    description: 'App Store Connect App ID'
+    required: false
+
+  # Google Play Console inputs
+  google-play-package-name:
+    description: 'Google Play package name (e.g., com.example.app)'
+    required: false
+  google-play-service-account:
+    description: 'Google Play Service Account JSON (base64 encoded or raw JSON)'
+    required: false
+
+  # Slack inputs
+  slack-webhook-url:
+    description: 'Slack Webhook URL for notifications'
+    required: false
+  slack-bot-token:
+    description: 'Slack Bot Token (xoxb-...) for notifications'
+    required: false
+  slack-channel:
+    description: 'Slack channel ID or name (required when using slack-bot-token)'
+    required: false
+  slack-language:
+    description: 'Language for Slack notifications (en or ja)'
+    required: false
+    default: 'en'
+  slack-mentions:
+    description: 'Comma-separated list of Slack user IDs to mention (e.g., U1234567890,U0987654321)'
+    required: false
+    default: ''
+
+  # Optional inputs
+  check-interval-cache:
+    description: 'Cache key to prevent duplicate notifications (e.g., review status hash)'
+    required: false
+    default: ''
+  notification-message-template:
+    description: 'Custom notification message template'
+    required: false
+    default: ''
+
+outputs:
+  app-store-status:
+    description: 'Current App Store review status'
+  google-play-status:
+    description: 'Current Google Play review status'
+  notification-sent:
+    description: 'Whether a notification was sent'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
