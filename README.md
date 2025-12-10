@@ -6,8 +6,6 @@
 
 Monitor App Store Connect and Google Play Console review status with Slack notifications. Supports **GitHub Actions** and **Bitrise**.
 
-App Store Connect と Google Play Console のレビューステータスを監視し、Slack で通知。**GitHub Actions** / **Bitrise** 対応。
-
 ## Features
 
 - Monitor App Store Connect review status
@@ -58,7 +56,7 @@ jobs:
           google-play-service-account: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT }}
           # Slack
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-          slack-language: 'ja'
+          slack-language: 'en'
 ```
 
 ### GitHub Actions Inputs
@@ -113,7 +111,7 @@ workflows:
             - google_play_service_account: $GOOGLE_PLAY_SERVICE_ACCOUNT
             # Slack
             - slack_webhook_url: $SLACK_WEBHOOK_URL
-            - slack_language: "ja"
+            - slack_language: "en"
 ```
 
 ### Scheduled Builds on Bitrise
@@ -238,7 +236,6 @@ When the app **recovers from REJECTED status** to an approved status, even with 
 
 ## Slack Notification Preview
 
-### English
 ```
 ✅ App Store Review Status Update
 
@@ -249,19 +246,6 @@ Current Status:        Previous Status:
 Ready For Sale         In Review
 
 Checked at: 2025-12-10T12:34:56Z
-```
-
-### Japanese
-```
-✅ App Store レビューステータス更新
-
-プラットフォーム:        バージョン:
-App Store              1.2.3 (100)
-
-現在のステータス:        前回のステータス:
-Ready For Sale         In Review
-
-確認日時: 2025-12-10T12:34:56Z
 ```
 
 ---

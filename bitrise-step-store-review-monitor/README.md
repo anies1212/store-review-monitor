@@ -1,22 +1,22 @@
 # Store Review Monitor - Bitrise Step
 
-App Store Connect と Google Play Console のレビューステータスを監視し、Slack で通知する Bitrise ステップです。
+A Bitrise Step that monitors App Store Connect and Google Play Console review status and sends Slack notifications.
 
-## 機能
+## Features
 
-- App Store Connect のレビューステータス監視
-- Google Play Console のレビューステータス監視
-- Slack 通知（Webhook / Bot Token 両対応）
-- 多言語対応（英語・日本語）
-- スマート通知ロジック（重複通知を防止）
-- バージョン/ビルド変更時の通知
-- リジェクトからの回復時の通知
+- Monitor App Store Connect review status
+- Monitor Google Play Console review status
+- Slack notifications (Webhook / Bot Token)
+- Multi-language support (English / Japanese)
+- Smart notification logic (prevents duplicate notifications)
+- Notify on version/build changes
+- Notify on rejection recovery
 
-## 使い方
+## Usage
 
-### 基本的な設定
+### Basic Setup
 
-`bitrise.yml` に以下のように追加します：
+Add to your `bitrise.yml`:
 
 ```yaml
 workflows:
@@ -35,144 +35,144 @@ workflows:
             - google_play_service_account: $GOOGLE_PLAY_SERVICE_ACCOUNT
             # Slack
             - slack_webhook_url: $SLACK_WEBHOOK_URL
-            - slack_language: "ja"
+            - slack_language: "en"
 ```
 
-### スケジュール実行
+### Scheduled Builds
 
-Bitrise の Scheduled Builds 機能を使って定期実行できます：
+Use Bitrise Scheduled Builds for periodic monitoring:
 
-1. Bitrise ダッシュボードでアプリを選択
-2. **Settings** > **Triggers** を開く
-3. **Scheduled** タブで新しいスケジュールを追加
-4. 実行間隔（例：6時間ごと）とワークフローを設定
+1. Go to Bitrise Dashboard > Your App
+2. Open **Settings** > **Triggers**
+3. Add a new schedule in the **Scheduled** tab
+4. Set the interval (e.g., every 6 hours) and workflow
 
-### キャッシュの設定（重要）
+### Cache Configuration (Important)
 
-ビルド間でバージョンキャッシュを保持するには、キャッシュステップを追加してください：
+To persist version cache between builds, add cache steps to your workflow:
 
 ```yaml
 workflows:
   monitor:
     steps:
-      # ビルド開始時にキャッシュを取得
+      # Pull cache at the start
       - cache-pull@2: {}
 
-      # 監視ステップ
+      # Monitor step
       - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@main:
           inputs:
             - app_store_issuer_id: $APP_STORE_ISSUER_ID
-            # ... その他の入力
+            # ... other inputs
 
-      # ビルド終了時にキャッシュを保存
+      # Push cache at the end
       - cache-push@2:
           inputs:
             - cache_paths: |
                 $BITRISE_CACHE_DIR/store-review-versions.json
 ```
 
-**注意**: キャッシュを設定しないと、毎回通知が送信されます。
+**Note**: Without cache configuration, notifications will be sent on every run.
 
-## 入力パラメータ
+## Inputs
 
 ### App Store Connect
 
-| パラメータ | 説明 | 必須 |
-|-----------|------|------|
-| `app_store_issuer_id` | App Store Connect API Issuer ID | いいえ |
-| `app_store_key_id` | App Store Connect API Key ID | いいえ |
-| `app_store_private_key` | App Store Connect API Private Key (base64 または raw .p8) | いいえ |
-| `app_store_app_id` | App Store App ID | いいえ |
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `app_store_issuer_id` | App Store Connect API Issuer ID | No |
+| `app_store_key_id` | App Store Connect API Key ID | No |
+| `app_store_private_key` | App Store Connect API Private Key (base64 or raw .p8) | No |
+| `app_store_app_id` | App Store App ID | No |
 
 ### Google Play
 
-| パラメータ | 説明 | 必須 |
-|-----------|------|------|
-| `google_play_package_name` | Android パッケージ名 (例: com.example.app) | いいえ |
-| `google_play_service_account` | Service Account JSON (base64 または raw JSON) | いいえ |
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `google_play_package_name` | Android package name (e.g., com.example.app) | No |
+| `google_play_service_account` | Service Account JSON (base64 or raw JSON) | No |
 
 ### Slack
 
-| パラメータ | 説明 | 必須 |
-|-----------|------|------|
-| `slack_webhook_url` | Slack Incoming Webhook URL | webhook または bot_token のどちらか |
-| `slack_bot_token` | Slack Bot Token (xoxb-...) | webhook または bot_token のどちらか |
-| `slack_channel` | Slack チャンネル ID または名前 | bot_token 使用時は必須 |
-| `slack_language` | 通知言語 (`en` または `ja`) | いいえ (デフォルト: `en`) |
-| `slack_mentions` | メンションするユーザー ID（カンマ区切り） | いいえ |
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `slack_webhook_url` | Slack Incoming Webhook URL | Either webhook or bot_token |
+| `slack_bot_token` | Slack Bot Token (xoxb-...) | Either webhook or bot_token |
+| `slack_channel` | Slack channel ID or name | Required with bot_token |
+| `slack_language` | Notification language (`en` or `ja`) | No (default: `en`) |
+| `slack_mentions` | User IDs to mention (comma-separated) | No |
 
-### その他
+### Other
 
-| パラメータ | 説明 | 必須 |
-|-----------|------|------|
-| `cache_path` | キャッシュファイルのパス | いいえ |
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `cache_path` | Cache file path | No |
 
-## 出力パラメータ
+## Outputs
 
-| パラメータ | 説明 |
-|-----------|------|
-| `STORE_REVIEW_APP_STORE_STATUS` | 現在の App Store レビューステータス |
-| `STORE_REVIEW_GOOGLE_PLAY_STATUS` | 現在の Google Play レビューステータス |
-| `STORE_REVIEW_NOTIFICATION_SENT` | 通知が送信されたかどうか (`true`/`false`) |
+| Parameter | Description |
+|-----------|-------------|
+| `STORE_REVIEW_APP_STORE_STATUS` | Current App Store review status |
+| `STORE_REVIEW_GOOGLE_PLAY_STATUS` | Current Google Play review status |
+| `STORE_REVIEW_NOTIFICATION_SENT` | Whether a notification was sent (`true`/`false`) |
 
-## セットアップ
+## Setup
 
-### App Store Connect API キーの作成
+### Creating App Store Connect API Key
 
-1. [App Store Connect](https://appstoreconnect.apple.com/) にログイン
-2. **ユーザーとアクセス** > **キー** を選択
-3. **App Store Connect API** タブで新しいキーを作成
-4. **Issuer ID**、**Key ID**、**.p8 ファイル**を保存
+1. Log in to [App Store Connect](https://appstoreconnect.apple.com/)
+2. Go to **Users and Access** > **Keys**
+3. Create a new key in the **App Store Connect API** tab
+4. Save the **Issuer ID**, **Key ID**, and **.p8 file**
 
-### Google Play Service Account の作成
+### Creating Google Play Service Account
 
-1. [Google Cloud Console](https://console.cloud.google.com/) にアクセス
-2. **IAM & Admin** > **Service Accounts** で新しいサービスアカウントを作成
-3. [Google Play Console](https://play.google.com/console/) で API アクセスを有効化
-4. サービスアカウントをリンクし、JSON キーをダウンロード
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new service account in **IAM & Admin** > **Service Accounts**
+3. Enable API access in [Google Play Console](https://play.google.com/console/)
+4. Link the service account and download the JSON key
 
-### Bitrise Secrets の設定
+### Configuring Bitrise Secrets
 
-Bitrise ダッシュボードで以下の Secrets を設定します：
+Set the following Secrets in Bitrise Dashboard:
 
 ```
 APP_STORE_ISSUER_ID: your-issuer-id
 APP_STORE_KEY_ID: your-key-id
-APP_STORE_PRIVATE_KEY: (base64 エンコードした .p8 ファイルの内容)
+APP_STORE_PRIVATE_KEY: (base64 encoded .p8 file content)
 APP_STORE_APP_ID: your-app-id
 
 GOOGLE_PLAY_PACKAGE_NAME: com.example.app
-GOOGLE_PLAY_SERVICE_ACCOUNT: (base64 エンコードした JSON の内容)
+GOOGLE_PLAY_SERVICE_ACCOUNT: (base64 encoded JSON content)
 
 SLACK_WEBHOOK_URL: https://hooks.slack.com/services/xxx/xxx/xxx
 ```
 
-## 通知トリガー
+## Notification Triggers
 
-通知が送信されるのは以下の場合です：
+Notifications are sent in the following cases:
 
-### バージョン/ビルド変更時
+### On Version/Build Change
 
-以下のステータスの場合に通知されます：
+Notifications are sent for these statuses:
 
 **App Store:**
-- `READY_FOR_SALE` - 販売準備完了
-- `PENDING_DEVELOPER_RELEASE` - デベロッパーリリース待ち
-- `PENDING_APPLE_RELEASE` - Apple リリース待ち
-- `REJECTED` - リジェクト
-- `METADATA_REJECTED` - メタデータリジェクト
-- `INVALID_BINARY` - 無効なバイナリ
+- `READY_FOR_SALE` - App is live
+- `PENDING_DEVELOPER_RELEASE` - Waiting for developer release
+- `PENDING_APPLE_RELEASE` - Waiting for Apple release
+- `REJECTED` - Rejected
+- `METADATA_REJECTED` - Metadata rejected
+- `INVALID_BINARY` - Invalid binary
 
 **Google Play:**
-- `COMPLETED` - リリース完了
+- `COMPLETED` - Release completed
 
-### リジェクトからの回復時
+### On Rejection Recovery
 
-同じバージョン/ビルドでも、リジェクト状態から承認状態に変わった場合は通知されます。
+Notifications are sent when the app recovers from a rejected state to an approved state, even with the same version/build.
 
-## サンプルワークフロー
+## Example Workflows
 
-### App Store のみ監視
+### Monitor App Store Only
 
 ```yaml
 workflows:
@@ -185,10 +185,10 @@ workflows:
             - app_store_private_key: $APP_STORE_PRIVATE_KEY
             - app_store_app_id: $APP_STORE_APP_ID
             - slack_webhook_url: $SLACK_WEBHOOK_URL
-            - slack_language: "ja"
+            - slack_language: "en"
 ```
 
-### Bot Token でメンション付き通知
+### With Bot Token and Mentions
 
 ```yaml
 workflows:
@@ -203,21 +203,21 @@ workflows:
             - slack_bot_token: $SLACK_BOT_TOKEN
             - slack_channel: "#app-releases"
             - slack_mentions: "U1234567890,U0987654321"
-            - slack_language: "ja"
+            - slack_language: "en"
 ```
 
-## ローカルでのテスト
+## Local Testing
 
 ```bash
 cd bitrise-step-store-review-monitor
 
-# 依存関係の取得
+# Install dependencies
 go mod tidy
 
-# ビルド
+# Build
 go build -o step
 
-# 環境変数を設定してテスト
+# Set environment variables and test
 export app_store_issuer_id="your-issuer-id"
 export app_store_key_id="your-key-id"
 export app_store_private_key="your-private-key"
@@ -226,11 +226,11 @@ export slack_webhook_url="your-webhook-url"
 ./step
 ```
 
-## 関連リンク
+## Related Links
 
-- [GitHub Actions 版](https://github.com/anies1212/store-review-monitor)
-- [Bitrise Step 開発ガイド](https://devcenter.bitrise.io/en/steps-and-workflows/developing-your-own-bitrise-step.html)
+- [GitHub Actions Version](https://github.com/anies1212/store-review-monitor)
+- [Bitrise Step Development Guide](https://devcenter.bitrise.io/en/steps-and-workflows/developing-your-own-bitrise-step.html)
 
-## ライセンス
+## License
 
 MIT License

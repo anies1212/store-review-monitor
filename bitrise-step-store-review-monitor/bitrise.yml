@@ -30,7 +30,7 @@ workflows:
             - google_play_service_account: $GOOGLE_PLAY_SERVICE_ACCOUNT
             # Slack
             - slack_webhook_url: $SLACK_WEBHOOK_URL
-            - slack_language: "ja"
+            - slack_language: "en"
 
   # Example: Monitor only App Store
   monitor_app_store:
@@ -54,7 +54,7 @@ workflows:
             - google_play_package_name: $GOOGLE_PLAY_PACKAGE_NAME
             - google_play_service_account: $GOOGLE_PLAY_SERVICE_ACCOUNT
             - slack_webhook_url: $SLACK_WEBHOOK_URL
-            - slack_language: "ja"
+            - slack_language: "en"
 
   # Example: Using Slack Bot Token instead of Webhook
   monitor_with_bot_token:
@@ -69,7 +69,7 @@ workflows:
             - slack_bot_token: $SLACK_BOT_TOKEN
             - slack_channel: "#app-releases"
             - slack_mentions: "U1234567890,U0987654321"
-            - slack_language: "ja"
+            - slack_language: "en"
 
   # Local development and testing
   test:
@@ -84,4 +84,4 @@ workflows:
             - google_play_package_name: $GOOGLE_PLAY_PACKAGE_NAME
             - google_play_service_account: $GOOGLE_PLAY_SERVICE_ACCOUNT
             - slack_webhook_url: $SLACK_WEBHOOK_URL
-            - slack_language: "ja"
+            - slack_language: "en"
