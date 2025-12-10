@@ -355,10 +355,38 @@ workflows:
 
 ### Scheduled Builds on Bitrise
 
-1. Go to Bitrise Dashboard > Your App
-2. **Settings** > **Triggers**
-3. **Scheduled** tab > Add new schedule
-4. Set interval (e.g., every 6 hours) and select your workflow
+#### Using Bitrise Dashboard
+
+1. Go to [Bitrise Dashboard](https://app.bitrise.io/) > Your App
+2. Open **Settings** > **Triggers**
+3. Click the **Scheduled** tab
+4. Click **+ Add scheduled build**
+5. Configure the schedule:
+   - **Workflow**: Select your monitoring workflow
+   - **Branch**: `main` (or your default branch)
+   - **Schedule**: Choose frequency
+
+#### Schedule Examples
+
+| Frequency | Cron Expression | Description |
+|-----------|-----------------|-------------|
+| Every 4 hours | `0 */4 * * *` | Runs at 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 |
+| Every 6 hours | `0 */6 * * *` | Runs at 00:00, 06:00, 12:00, 18:00 |
+| Every 12 hours | `0 */12 * * *` | Runs at 00:00, 12:00 |
+| Once daily (9 AM) | `0 9 * * *` | Runs at 09:00 every day |
+
+#### Using bitrise.yml (trigger_map)
+
+```yaml
+trigger_map:
+  - schedule: "0 */6 * * *"
+    workflow: monitor-appstore
+
+workflows:
+  monitor-appstore:
+    steps:
+      # ... your steps
+```
 
 ---
 

@@ -209,14 +209,61 @@ workflows:
                 $BITRISE_CACHE_DIR/store-review-versions.json
 ```
 
-## Scheduled Builds
+## Scheduled Builds (Cron)
 
-Use Bitrise Scheduled Builds for periodic monitoring:
+To run this step periodically, configure Bitrise Scheduled Builds:
 
-1. Go to Bitrise Dashboard > Your App
+### Using Bitrise Dashboard
+
+1. Go to [Bitrise Dashboard](https://app.bitrise.io/) > Your App
 2. Open **Settings** > **Triggers**
-3. Add a new schedule in the **Scheduled** tab
-4. Set the interval (e.g., every 6 hours) and workflow
+3. Click the **Scheduled** tab
+4. Click **+ Add scheduled build**
+5. Configure the schedule:
+   - **Workflow**: Select your monitoring workflow (e.g., `monitor-appstore`)
+   - **Branch**: `main` (or your default branch)
+   - **Schedule**: Choose frequency
+
+### Schedule Examples
+
+| Frequency | Cron Expression | Description |
+|-----------|-----------------|-------------|
+| Every 4 hours | `0 */4 * * *` | Runs at 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 |
+| Every 6 hours | `0 */6 * * *` | Runs at 00:00, 06:00, 12:00, 18:00 |
+| Every 12 hours | `0 */12 * * *` | Runs at 00:00, 12:00 |
+| Once daily (9 AM) | `0 9 * * *` | Runs at 09:00 every day |
+| Weekdays only (9 AM) | `0 9 * * 1-5` | Runs at 09:00 Monday-Friday |
+
+### Using bitrise.yml (trigger_map)
+
+You can also define scheduled triggers in your `bitrise.yml`:
+
+```yaml
+format_version: "11"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+trigger_map:
+  - schedule: "0 */6 * * *"
+    workflow: monitor-appstore
+
+workflows:
+  monitor-appstore:
+    steps:
+      - cache-pull@2: {}
+      - git::https://github.com/anies1212/bitrise-step-store-review-monitor.git@1.0.0:
+          inputs:
+            - app_store_issuer_id: $APP_STORE_ISSUER_ID
+            - app_store_key_id: $APP_STORE_KEY_ID
+            - app_store_private_key: $APP_STORE_PRIVATE_KEY
+            - app_store_app_id: $APP_STORE_APP_ID
+            - slack_webhook_url: $SLACK_WEBHOOK_URL
+      - cache-push@2:
+          inputs:
+            - cache_paths: |
+                $BITRISE_CACHE_DIR/store-review-versions.json
+```
+
+**Note**: Scheduled builds require a Bitrise plan that supports this feature. Check your plan's limitations.
 
 ## Setup
 
