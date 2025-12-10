@@ -41,14 +41,3 @@ coverage/
 # Temporary files
 *.tmp
 .cache/
-
-# ===== Bitrise Step (Go) =====
-# Go build output
-bitrise-step-store-review-monitor/step
-bitrise-step-store-review-monitor/*.exe
-
-# Go dependencies (managed by go mod)
-bitrise-step-store-review-monitor/vendor/
-
-# Go sum file is typically committed, but can be regenerated
-# bitrise-step-store-review-monitor/go.sum
