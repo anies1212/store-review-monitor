@@ -17,7 +17,8 @@ export interface VersionCache {
   lastChecked: string;
 }
 
-const VARIABLE_NAME = 'STORE_REVIEW_CACHE';
+const CACHE_BRANCH = 'store-review-cache';
+const CACHE_FILE_PATH = 'cache/versions.json';
 
 export class VersionCacheManager {
   private octokit;
@@ -33,17 +34,24 @@ export class VersionCacheManager {
 
   async loadPreviousVersions(): Promise<VersionCache | null> {
     try {
-      core.info('Loading previous version cache from repository variable...');
+      core.info('Loading previous version cache from cache branch...');
 
-      const { data } = await this.octokit.rest.actions.getRepoVariable({
+      const { data } = await this.octokit.rest.repos.getContent({
         owner: this.owner,
         repo: this.repo,
-        name: VARIABLE_NAME,
+        path: CACHE_FILE_PATH,
+        ref: CACHE_BRANCH,
       });
 
-      const versionCache = JSON.parse(data.value) as VersionCache;
-      core.info(`Loaded previous versions: ${JSON.stringify(versionCache)}`);
-      return versionCache;
+      if ('content' in data) {
+        const content = Buffer.from(data.content, 'base64').toString('utf-8');
+        const versionCache = JSON.parse(content) as VersionCache;
+        core.info(`Loaded previous versions: ${JSON.stringify(versionCache)}`);
+        return versionCache;
+      }
+
+      core.info('Cache file found but no content');
+      return null;
     } catch (error) {
       if (error instanceof Error && 'status' in error && (error as { status: number }).status === 404) {
         core.info('No previous cache found (first run)');
@@ -56,33 +64,76 @@ export class VersionCacheManager {
 
   async saveCurrentVersions(versionCache: VersionCache): Promise<void> {
     try {
-      core.info('Saving current version cache to repository variable...');
+      core.info('Saving current version cache to cache branch...');
 
-      const value = JSON.stringify(versionCache);
+      const content = Buffer.from(
+        JSON.stringify(versionCache, null, 2)
+      ).toString('base64');
 
+      // Ensure cache branch exists
+      await this.ensureCacheBranch();
+
+      // Check if file already exists to get its SHA
+      let fileSha: string | undefined;
       try {
-        await this.octokit.rest.actions.updateRepoVariable({
+        const { data } = await this.octokit.rest.repos.getContent({
           owner: this.owner,
           repo: this.repo,
-          name: VARIABLE_NAME,
-          value,
+          path: CACHE_FILE_PATH,
+          ref: CACHE_BRANCH,
         });
-      } catch (error) {
-        if (error instanceof Error && 'status' in error && (error as { status: number }).status === 404) {
-          await this.octokit.rest.actions.createRepoVariable({
-            owner: this.owner,
-            repo: this.repo,
-            name: VARIABLE_NAME,
-            value,
-          });
-        } else {
-          throw error;
+        if ('sha' in data) {
+          fileSha = data.sha;
         }
+      } catch {
+        // File doesn't exist yet
       }
+
+      await this.octokit.rest.repos.createOrUpdateFileContents({
+        owner: this.owner,
+        repo: this.repo,
+        path: CACHE_FILE_PATH,
+        message: `chore: update store review cache [skip ci]`,
+        content,
+        branch: CACHE_BRANCH,
+        ...(fileSha ? { sha: fileSha } : {}),
+      });
 
       core.info('Cache saved successfully');
     } catch (error) {
       core.warning(`Failed to save current versions: ${error}`);
+    }
+  }
+
+  private async ensureCacheBranch(): Promise<void> {
+    try {
+      await this.octokit.rest.repos.getBranch({
+        owner: this.owner,
+        repo: this.repo,
+        branch: CACHE_BRANCH,
+      });
+    } catch (error) {
+      if (error instanceof Error && 'status' in error && (error as { status: number }).status === 404) {
+        core.info(`Creating cache branch: ${CACHE_BRANCH}`);
+
+        // Get default branch SHA
+        const { data: ref } = await this.octokit.rest.git.getRef({
+          owner: this.owner,
+          repo: this.repo,
+          ref: `heads/${github.context.ref.replace('refs/heads/', '')}`,
+        });
+
+        await this.octokit.rest.git.createRef({
+          owner: this.owner,
+          repo: this.repo,
+          ref: `refs/heads/${CACHE_BRANCH}`,
+          sha: ref.object.sha,
+        });
+
+        core.info(`Cache branch created: ${CACHE_BRANCH}`);
+      } else {
+        throw error;
+      }
     }
   }
 

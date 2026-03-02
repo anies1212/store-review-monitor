@@ -47,9 +47,9 @@ inputs:
     required: false
     default: ''
 
-  # GitHub token (required for cache persistence via repository variables)
+  # GitHub token (required for cache persistence via cache branch)
   github-token:
-    description: 'GitHub token for storing cache in repository variables'
+    description: 'GitHub token with contents:write permission for cache branch'
     required: false
     default: ${{ github.token }}
 
