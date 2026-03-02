@@ -23,7 +23,7 @@ const ARTIFACT_NAME = 'store-review-versions';
 const CACHE_FILE_NAME = 'versions.json';
 
 export class VersionCacheManager {
-  private artifactClient = artifact.create();
+  private artifactClient = new artifact.DefaultArtifactClient();
 
   /**
    * Load the previous version cache from artifact
@@ -38,10 +38,11 @@ export class VersionCacheManager {
         fs.mkdirSync(downloadPath, { recursive: true });
       }
 
-      // Download the artifact
+      // Find and download the artifact
+      const { artifact: foundArtifact } = await this.artifactClient.getArtifact(ARTIFACT_NAME);
       const downloadResult = await this.artifactClient.downloadArtifact(
-        ARTIFACT_NAME,
-        downloadPath
+        foundArtifact.id,
+        { path: downloadPath }
       );
 
       core.info(`Artifact downloaded to: ${downloadResult.downloadPath}`);
@@ -90,13 +91,10 @@ export class VersionCacheManager {
       const uploadResult = await this.artifactClient.uploadArtifact(
         ARTIFACT_NAME,
         [cacheFilePath],
-        uploadPath,
-        {
-          continueOnError: false,
-        }
+        uploadPath
       );
 
-      core.info(`Artifact uploaded successfully: ${uploadResult.artifactName}`);
+      core.info(`Artifact uploaded successfully: ${uploadResult.id}`);
 
       // Clean up temporary directory
       fs.rmSync(uploadPath, { recursive: true, force: true });
@@ -111,8 +109,8 @@ export class VersionCacheManager {
   hasVersionOrBuildChanged(
     platform: 'appStore' | 'googlePlay',
     currentVersion: string | number,
-    currentBuild?: string | number,
-    previousCache: VersionCache | null
+    previousCache: VersionCache | null,
+    currentBuild?: string | number
   ): boolean {
     if (!previousCache) {
       core.info(`No previous cache found for ${platform}, treating as changed`);
@@ -125,21 +123,23 @@ export class VersionCacheManager {
       return true;
     }
 
-    if (platform === 'appStore') {
+    if (platform === 'appStore' && 'version' in previousData) {
       const versionChanged = previousData.version !== currentVersion;
-      const buildChanged = currentBuild && previousData.buildNumber !== currentBuild;
+      const buildChanged = currentBuild !== undefined && previousData.buildNumber !== currentBuild;
       const changed = versionChanged || buildChanged;
       core.info(
         `App Store comparison: v${previousData.version}(${previousData.buildNumber}) vs v${currentVersion}(${currentBuild}) - Changed: ${changed}`
       );
       return changed;
-    } else {
+    } else if (platform === 'googlePlay' && 'versionCode' in previousData) {
       const versionChanged = previousData.versionCode !== currentVersion;
       core.info(
         `Google Play version comparison: ${previousData.versionCode} vs ${currentVersion} - Changed: ${versionChanged}`
       );
       return versionChanged;
     }
+
+    return true;
   }
 
   /**

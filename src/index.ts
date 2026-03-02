@@ -87,8 +87,8 @@ async function run(): Promise<void> {
           const versionOrBuildChanged = cacheManager.hasVersionOrBuildChanged(
             'appStore',
             reviewInfo.version,
-            reviewInfo.buildNumber,
-            previousCache
+            previousCache,
+            reviewInfo.buildNumber
           );
 
           // Check if recovered from rejection (same version/build but status changed from REJECTED to approved)
@@ -167,7 +167,6 @@ async function run(): Promise<void> {
           const versionChanged = cacheManager.hasVersionOrBuildChanged(
             'googlePlay',
             reviewInfo.versionCode,
-            undefined,
             previousCache
           );
 
