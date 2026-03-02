@@ -47,6 +47,12 @@ inputs:
     required: false
     default: ''
 
+  # GitHub token (required for cache persistence via repository variables)
+  github-token:
+    description: 'GitHub token for storing cache in repository variables'
+    required: false
+    default: ${{ github.token }}
+
   # Optional inputs
   check-interval-cache:
     description: 'Cache key to prevent duplicate notifications (e.g., review status hash)'

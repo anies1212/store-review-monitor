@@ -1,7 +1,5 @@
 import * as core from '@actions/core';
-import * as cache from '@actions/cache';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as github from '@actions/github';
 
 export interface VersionCache {
   appStore?: {
@@ -19,80 +17,72 @@ export interface VersionCache {
   lastChecked: string;
 }
 
-const CACHE_KEY_PREFIX = 'store-review-versions-v1';
-const CACHE_RESTORE_KEY = CACHE_KEY_PREFIX;
-const CACHE_FILE_NAME = 'versions.json';
+const VARIABLE_NAME = 'STORE_REVIEW_CACHE';
 
 export class VersionCacheManager {
-  private cacheDirPath: string;
-  private cacheFilePath: string;
+  private octokit;
+  private owner: string;
+  private repo: string;
 
   constructor() {
-    this.cacheDirPath = path.join(process.cwd(), '.version-cache');
-    this.cacheFilePath = path.join(this.cacheDirPath, CACHE_FILE_NAME);
+    const token = process.env.GITHUB_TOKEN || core.getInput('github-token');
+    this.octokit = github.getOctokit(token);
+    this.owner = github.context.repo.owner;
+    this.repo = github.context.repo.repo;
   }
 
   async loadPreviousVersions(): Promise<VersionCache | null> {
     try {
-      core.info('Loading previous version cache...');
+      core.info('Loading previous version cache from repository variable...');
 
-      if (!fs.existsSync(this.cacheDirPath)) {
-        fs.mkdirSync(this.cacheDirPath, { recursive: true });
-      }
+      const { data } = await this.octokit.rest.actions.getRepoVariable({
+        owner: this.owner,
+        repo: this.repo,
+        name: VARIABLE_NAME,
+      });
 
-      const cacheHit = await cache.restoreCache(
-        [this.cacheFilePath],
-        CACHE_RESTORE_KEY,
-        [CACHE_RESTORE_KEY]
-      );
-
-      if (!cacheHit) {
-        core.info('No previous cache found (first run)');
-        return null;
-      }
-
-      if (fs.existsSync(this.cacheFilePath)) {
-        const cacheContent = fs.readFileSync(this.cacheFilePath, 'utf-8');
-        const versionCache = JSON.parse(cacheContent) as VersionCache;
-        core.info(`Loaded previous versions: ${JSON.stringify(versionCache)}`);
-        return versionCache;
-      }
-
-      core.info('Cache restored but file not found');
-      return null;
+      const versionCache = JSON.parse(data.value) as VersionCache;
+      core.info(`Loaded previous versions: ${JSON.stringify(versionCache)}`);
+      return versionCache;
     } catch (error) {
-      core.warning(`Failed to load previous versions: ${error}`);
+      if (error instanceof Error && 'status' in error && (error as { status: number }).status === 404) {
+        core.info('No previous cache found (first run)');
+      } else {
+        core.warning(`Failed to load previous versions: ${error}`);
+      }
       return null;
     }
   }
 
   async saveCurrentVersions(versionCache: VersionCache): Promise<void> {
     try {
-      core.info('Saving current version cache...');
+      core.info('Saving current version cache to repository variable...');
 
-      if (!fs.existsSync(this.cacheDirPath)) {
-        fs.mkdirSync(this.cacheDirPath, { recursive: true });
+      const value = JSON.stringify(versionCache);
+
+      try {
+        await this.octokit.rest.actions.updateRepoVariable({
+          owner: this.owner,
+          repo: this.repo,
+          name: VARIABLE_NAME,
+          value,
+        });
+      } catch (error) {
+        if (error instanceof Error && 'status' in error && (error as { status: number }).status === 404) {
+          await this.octokit.rest.actions.createRepoVariable({
+            owner: this.owner,
+            repo: this.repo,
+            name: VARIABLE_NAME,
+            value,
+          });
+        } else {
+          throw error;
+        }
       }
 
-      fs.writeFileSync(
-        this.cacheFilePath,
-        JSON.stringify(versionCache, null, 2),
-        'utf-8'
-      );
-
-      // Use timestamp in key to ensure uniqueness (cache keys are immutable)
-      const cacheKey = `${CACHE_KEY_PREFIX}-${Date.now()}`;
-      await cache.saveCache([this.cacheFilePath], cacheKey);
       core.info('Cache saved successfully');
     } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.includes('already exists')
-      ) {
-        core.info('Cache with this key already exists, will be updated on next change');
-      } else {
-        core.warning(`Failed to save current versions: ${error}`);
-      }
+      core.warning(`Failed to save current versions: ${error}`);
     }
   }
 
