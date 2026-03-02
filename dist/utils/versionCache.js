@@ -35,79 +35,64 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VersionCacheManager = void 0;
 const core = __importStar(require("@actions/core"));
-const artifact = __importStar(require("@actions/artifact"));
+const cache = __importStar(require("@actions/cache"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-const ARTIFACT_NAME = 'store-review-versions';
+const CACHE_KEY_PREFIX = 'store-review-versions-v1';
+const CACHE_RESTORE_KEY = CACHE_KEY_PREFIX;
 const CACHE_FILE_NAME = 'versions.json';
 class VersionCacheManager {
     constructor() {
-        this.artifactClient = new artifact.DefaultArtifactClient();
+        this.cacheDirPath = path.join(process.cwd(), '.version-cache');
+        this.cacheFilePath = path.join(this.cacheDirPath, CACHE_FILE_NAME);
     }
-    /**
-     * Load the previous version cache from artifact
-     */
     async loadPreviousVersions() {
         try {
-            core.info('Loading previous version cache from artifact...');
-            // Create a temporary directory for downloading
-            const downloadPath = path.join(process.cwd(), '.version-cache');
-            if (!fs.existsSync(downloadPath)) {
-                fs.mkdirSync(downloadPath, { recursive: true });
+            core.info('Loading previous version cache...');
+            if (!fs.existsSync(this.cacheDirPath)) {
+                fs.mkdirSync(this.cacheDirPath, { recursive: true });
             }
-            // Find and download the artifact
-            const { artifact: foundArtifact } = await this.artifactClient.getArtifact(ARTIFACT_NAME);
-            const downloadResult = await this.artifactClient.downloadArtifact(foundArtifact.id, { path: downloadPath });
-            core.info(`Artifact downloaded to: ${downloadResult.downloadPath}`);
-            // Read the cache file
-            const cacheFilePath = path.join(downloadPath, CACHE_FILE_NAME);
-            if (fs.existsSync(cacheFilePath)) {
-                const cacheContent = fs.readFileSync(cacheFilePath, 'utf-8');
-                const cache = JSON.parse(cacheContent);
-                core.info(`Loaded previous versions: ${JSON.stringify(cache)}`);
-                return cache;
+            const cacheHit = await cache.restoreCache([this.cacheFilePath], CACHE_RESTORE_KEY, [CACHE_RESTORE_KEY]);
+            if (!cacheHit) {
+                core.info('No previous cache found (first run)');
+                return null;
             }
-            core.info('No cache file found in artifact');
+            if (fs.existsSync(this.cacheFilePath)) {
+                const cacheContent = fs.readFileSync(this.cacheFilePath, 'utf-8');
+                const versionCache = JSON.parse(cacheContent);
+                core.info(`Loaded previous versions: ${JSON.stringify(versionCache)}`);
+                return versionCache;
+            }
+            core.info('Cache restored but file not found');
             return null;
         }
         catch (error) {
-            if (error instanceof Error && error.message.includes('Unable to find')) {
-                core.info('No previous artifact found (first run)');
+            core.warning(`Failed to load previous versions: ${error}`);
+            return null;
+        }
+    }
+    async saveCurrentVersions(versionCache) {
+        try {
+            core.info('Saving current version cache...');
+            if (!fs.existsSync(this.cacheDirPath)) {
+                fs.mkdirSync(this.cacheDirPath, { recursive: true });
+            }
+            fs.writeFileSync(this.cacheFilePath, JSON.stringify(versionCache, null, 2), 'utf-8');
+            // Use timestamp in key to ensure uniqueness (cache keys are immutable)
+            const cacheKey = `${CACHE_KEY_PREFIX}-${Date.now()}`;
+            await cache.saveCache([this.cacheFilePath], cacheKey);
+            core.info('Cache saved successfully');
+        }
+        catch (error) {
+            if (error instanceof Error &&
+                error.message.includes('already exists')) {
+                core.info('Cache with this key already exists, will be updated on next change');
             }
             else {
-                core.warning(`Failed to load previous versions: ${error}`);
+                core.warning(`Failed to save current versions: ${error}`);
             }
-            return null;
         }
     }
-    /**
-     * Save the current version cache to artifact
-     */
-    async saveCurrentVersions(cache) {
-        try {
-            core.info('Saving current version cache to artifact...');
-            // Create a temporary directory for uploading
-            const uploadPath = path.join(process.cwd(), '.version-cache-upload');
-            if (!fs.existsSync(uploadPath)) {
-                fs.mkdirSync(uploadPath, { recursive: true });
-            }
-            // Write the cache file
-            const cacheFilePath = path.join(uploadPath, CACHE_FILE_NAME);
-            fs.writeFileSync(cacheFilePath, JSON.stringify(cache, null, 2), 'utf-8');
-            core.info(`Cache file created at: ${cacheFilePath}`);
-            // Upload the artifact
-            const uploadResult = await this.artifactClient.uploadArtifact(ARTIFACT_NAME, [cacheFilePath], uploadPath);
-            core.info(`Artifact uploaded successfully: ${uploadResult.id}`);
-            // Clean up temporary directory
-            fs.rmSync(uploadPath, { recursive: true, force: true });
-        }
-        catch (error) {
-            core.warning(`Failed to save current versions: ${error}`);
-        }
-    }
-    /**
-     * Check if the version or build has changed
-     */
     hasVersionOrBuildChanged(platform, currentVersion, previousCache, currentBuild) {
         if (!previousCache) {
             core.info(`No previous cache found for ${platform}, treating as changed`);
@@ -132,9 +117,6 @@ class VersionCacheManager {
         }
         return true;
     }
-    /**
-     * Check if status changed from REJECTED to approved status
-     */
     hasRecoveredFromRejection(platform, currentStatus, previousCache) {
         if (!previousCache) {
             return false;
@@ -145,9 +127,7 @@ class VersionCacheManager {
         }
         const previousStatus = previousData.status.toLowerCase();
         const currentStatusLower = currentStatus.toLowerCase();
-        // Check if previous status was rejected
         const wasRejected = previousStatus.includes('rejected');
-        // Check if current status is approved/success
         const isApproved = currentStatusLower.includes('ready_for_sale') ||
             currentStatusLower.includes('pending_developer_release') ||
             currentStatusLower.includes('pending_apple_release') ||

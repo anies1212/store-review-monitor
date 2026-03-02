@@ -1,5 +1,5 @@
 import * as core from '@actions/core';
-import * as artifact from '@actions/artifact';
+import * as cache from '@actions/cache';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -19,93 +19,83 @@ export interface VersionCache {
   lastChecked: string;
 }
 
-const ARTIFACT_NAME = 'store-review-versions';
+const CACHE_KEY_PREFIX = 'store-review-versions-v1';
+const CACHE_RESTORE_KEY = CACHE_KEY_PREFIX;
 const CACHE_FILE_NAME = 'versions.json';
 
 export class VersionCacheManager {
-  private artifactClient = new artifact.DefaultArtifactClient();
+  private cacheDirPath: string;
+  private cacheFilePath: string;
 
-  /**
-   * Load the previous version cache from artifact
-   */
+  constructor() {
+    this.cacheDirPath = path.join(process.cwd(), '.version-cache');
+    this.cacheFilePath = path.join(this.cacheDirPath, CACHE_FILE_NAME);
+  }
+
   async loadPreviousVersions(): Promise<VersionCache | null> {
     try {
-      core.info('Loading previous version cache from artifact...');
+      core.info('Loading previous version cache...');
 
-      // Create a temporary directory for downloading
-      const downloadPath = path.join(process.cwd(), '.version-cache');
-      if (!fs.existsSync(downloadPath)) {
-        fs.mkdirSync(downloadPath, { recursive: true });
+      if (!fs.existsSync(this.cacheDirPath)) {
+        fs.mkdirSync(this.cacheDirPath, { recursive: true });
       }
 
-      // Find and download the artifact
-      const { artifact: foundArtifact } = await this.artifactClient.getArtifact(ARTIFACT_NAME);
-      const downloadResult = await this.artifactClient.downloadArtifact(
-        foundArtifact.id,
-        { path: downloadPath }
+      const cacheHit = await cache.restoreCache(
+        [this.cacheFilePath],
+        CACHE_RESTORE_KEY,
+        [CACHE_RESTORE_KEY]
       );
 
-      core.info(`Artifact downloaded to: ${downloadResult.downloadPath}`);
-
-      // Read the cache file
-      const cacheFilePath = path.join(downloadPath, CACHE_FILE_NAME);
-      if (fs.existsSync(cacheFilePath)) {
-        const cacheContent = fs.readFileSync(cacheFilePath, 'utf-8');
-        const cache = JSON.parse(cacheContent) as VersionCache;
-        core.info(`Loaded previous versions: ${JSON.stringify(cache)}`);
-        return cache;
+      if (!cacheHit) {
+        core.info('No previous cache found (first run)');
+        return null;
       }
 
-      core.info('No cache file found in artifact');
+      if (fs.existsSync(this.cacheFilePath)) {
+        const cacheContent = fs.readFileSync(this.cacheFilePath, 'utf-8');
+        const versionCache = JSON.parse(cacheContent) as VersionCache;
+        core.info(`Loaded previous versions: ${JSON.stringify(versionCache)}`);
+        return versionCache;
+      }
+
+      core.info('Cache restored but file not found');
       return null;
     } catch (error) {
-      if (error instanceof Error && error.message.includes('Unable to find')) {
-        core.info('No previous artifact found (first run)');
-      } else {
-        core.warning(`Failed to load previous versions: ${error}`);
-      }
+      core.warning(`Failed to load previous versions: ${error}`);
       return null;
     }
   }
 
-  /**
-   * Save the current version cache to artifact
-   */
-  async saveCurrentVersions(cache: VersionCache): Promise<void> {
+  async saveCurrentVersions(versionCache: VersionCache): Promise<void> {
     try {
-      core.info('Saving current version cache to artifact...');
+      core.info('Saving current version cache...');
 
-      // Create a temporary directory for uploading
-      const uploadPath = path.join(process.cwd(), '.version-cache-upload');
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath, { recursive: true });
+      if (!fs.existsSync(this.cacheDirPath)) {
+        fs.mkdirSync(this.cacheDirPath, { recursive: true });
       }
 
-      // Write the cache file
-      const cacheFilePath = path.join(uploadPath, CACHE_FILE_NAME);
-      fs.writeFileSync(cacheFilePath, JSON.stringify(cache, null, 2), 'utf-8');
-
-      core.info(`Cache file created at: ${cacheFilePath}`);
-
-      // Upload the artifact
-      const uploadResult = await this.artifactClient.uploadArtifact(
-        ARTIFACT_NAME,
-        [cacheFilePath],
-        uploadPath
+      fs.writeFileSync(
+        this.cacheFilePath,
+        JSON.stringify(versionCache, null, 2),
+        'utf-8'
       );
 
-      core.info(`Artifact uploaded successfully: ${uploadResult.id}`);
-
-      // Clean up temporary directory
-      fs.rmSync(uploadPath, { recursive: true, force: true });
+      // Use timestamp in key to ensure uniqueness (cache keys are immutable)
+      const cacheKey = `${CACHE_KEY_PREFIX}-${Date.now()}`;
+      await cache.saveCache([this.cacheFilePath], cacheKey);
+      core.info('Cache saved successfully');
     } catch (error) {
-      core.warning(`Failed to save current versions: ${error}`);
+      if (
+        error instanceof Error &&
+        error.message.includes('already exists')
+      ) {
+        core.info('Cache with this key already exists, will be updated on next change');
+      } else {
+        core.warning(`Failed to save current versions: ${error}`);
+      }
     }
   }
 
-  /**
-   * Check if the version or build has changed
-   */
   hasVersionOrBuildChanged(
     platform: 'appStore' | 'googlePlay',
     currentVersion: string | number,
@@ -142,9 +132,6 @@ export class VersionCacheManager {
     return true;
   }
 
-  /**
-   * Check if status changed from REJECTED to approved status
-   */
   hasRecoveredFromRejection(
     platform: 'appStore' | 'googlePlay',
     currentStatus: string,
@@ -162,10 +149,8 @@ export class VersionCacheManager {
     const previousStatus = previousData.status.toLowerCase();
     const currentStatusLower = currentStatus.toLowerCase();
 
-    // Check if previous status was rejected
     const wasRejected = previousStatus.includes('rejected');
 
-    // Check if current status is approved/success
     const isApproved =
       currentStatusLower.includes('ready_for_sale') ||
       currentStatusLower.includes('pending_developer_release') ||
