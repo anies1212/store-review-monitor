@@ -24,7 +24,7 @@ export class AppStoreConnectMonitor {
         }
       );
 
-      // Get the latest app store version
+      // Get app store versions (sort not supported, fetch multiple and pick latest)
       const versionsResponse = await axios.get(
         `${this.baseURL}/apps/${this.config.appId}/appStoreVersions`,
         {
@@ -33,7 +33,6 @@ export class AppStoreConnectMonitor {
           },
           params: {
             'filter[platform]': 'IOS',
-            'limit': 1,
           },
         }
       );
@@ -43,7 +42,12 @@ export class AppStoreConnectMonitor {
         return null;
       }
 
-      const latestVersion = versionsResponse.data.data[0];
+      // Sort by createdDate descending to get the latest version
+      const versions = versionsResponse.data.data.sort(
+        (a: { attributes: { createdDate: string } }, b: { attributes: { createdDate: string } }) =>
+          new Date(b.attributes.createdDate).getTime() - new Date(a.attributes.createdDate).getTime()
+      );
+      const latestVersion = versions[0];
       const status = latestVersion.attributes.appStoreState as AppStoreReviewStatus;
       const version = latestVersion.attributes.versionString;
 

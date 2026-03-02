@@ -93591,21 +93591,22 @@ class AppStoreConnectMonitor {
                     Authorization: `Bearer ${token}`,
                 },
             });
-            // Get the latest app store version
+            // Get app store versions (sort not supported, fetch multiple and pick latest)
             const versionsResponse = await axios_1.default.get(`${this.baseURL}/apps/${this.config.appId}/appStoreVersions`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
                 params: {
                     'filter[platform]': 'IOS',
-                    'limit': 1,
                 },
             });
             if (!versionsResponse.data.data || versionsResponse.data.data.length === 0) {
                 console.log('No app store versions found');
                 return null;
             }
-            const latestVersion = versionsResponse.data.data[0];
+            // Sort by createdDate descending to get the latest version
+            const versions = versionsResponse.data.data.sort((a, b) => new Date(b.attributes.createdDate).getTime() - new Date(a.attributes.createdDate).getTime());
+            const latestVersion = versions[0];
             const status = latestVersion.attributes.appStoreState;
             const version = latestVersion.attributes.versionString;
             // Get the build number from the build relationship
