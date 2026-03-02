@@ -61,7 +61,6 @@ class AppStoreConnectMonitor {
                 params: {
                     'filter[platform]': 'IOS',
                     'limit': 1,
-                    'sort': '-createdDate',
                 },
             });
             if (!versionsResponse.data.data || versionsResponse.data.data.length === 0) {

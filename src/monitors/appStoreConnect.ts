@@ -34,7 +34,6 @@ export class AppStoreConnectMonitor {
           params: {
             'filter[platform]': 'IOS',
             'limit': 1,
-            'sort': '-createdDate',
           },
         }
       );
