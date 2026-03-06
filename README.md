@@ -29,12 +29,7 @@ Monitor App Store Connect and Google Play Console review status with Slack notif
 
 ### Required Permissions
 
-This action stores version cache in a dedicated branch (`store-review-cache`) to track status changes between runs. The workflow needs `contents: write` permission:
-
-```yaml
-permissions:
-  contents: write
-```
+This action uses GitHub Artifacts to persist version cache between runs. No special permissions are required beyond the default `actions: read` permission (included by default in `GITHUB_TOKEN`).
 
 ### Inputs
 
@@ -51,7 +46,7 @@ permissions:
 | `slack-channel` | Yes**** | Slack channel ID or name |
 | `slack-language` | No | Language (`en` or `ja`, default: `en`) |
 | `slack-mentions` | No | Slack user IDs to mention (comma-separated) |
-| `github-token` | No | GitHub token for cache branch (default: `${{ github.token }}`) |
+| `github-token` | No | GitHub token for artifact cache (default: `${{ github.token }}`) |
 
 \* Required for App Store monitoring (all 4 parameters must be provided together)
 \*\* Required for Google Play monitoring (both parameters must be provided together)
@@ -78,15 +73,12 @@ on:
     - cron: '0 */6 * * *'  # Every 6 hours
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
       - name: Monitor App Store
-        uses: anies1212/store-review-monitor@v1.4.0
+        uses: anies1212/store-review-monitor@v1.5.0
         with:
           app-store-issuer-id: ${{ secrets.APP_STORE_ISSUER_ID }}
           app-store-key-id: ${{ secrets.APP_STORE_KEY_ID }}
@@ -105,15 +97,12 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
       - name: Monitor Google Play
-        uses: anies1212/store-review-monitor@v1.4.0
+        uses: anies1212/store-review-monitor@v1.5.0
         with:
           google-play-package-name: com.example.myapp
           google-play-service-account: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT }}
@@ -130,15 +119,12 @@ on:
     - cron: '0 */4 * * *'  # Every 4 hours
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
       - name: Monitor App Store and Google Play
-        uses: anies1212/store-review-monitor@v1.4.0
+        uses: anies1212/store-review-monitor@v1.5.0
         with:
           # App Store Connect
           app-store-issuer-id: ${{ secrets.APP_STORE_ISSUER_ID }}
@@ -165,16 +151,13 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
       - name: Monitor Store Reviews
         id: monitor
-        uses: anies1212/store-review-monitor@v1.4.0
+        uses: anies1212/store-review-monitor@v1.5.0
         with:
           app-store-issuer-id: ${{ secrets.APP_STORE_ISSUER_ID }}
           app-store-key-id: ${{ secrets.APP_STORE_KEY_ID }}

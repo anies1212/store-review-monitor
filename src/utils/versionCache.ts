@@ -1,5 +1,8 @@
-import * as core from '@actions/core';
-import * as github from '@actions/github';
+import * as core from "@actions/core";
+import * as github from "@actions/github";
+import artifact, { DefaultArtifactClient } from "@actions/artifact";
+import * as fs from "fs";
+import * as path from "path";
 
 export interface VersionCache {
   appStore?: {
@@ -17,131 +20,131 @@ export interface VersionCache {
   lastChecked: string;
 }
 
-const CACHE_BRANCH = 'store-review-cache';
-const CACHE_FILE_PATH = 'cache/versions.json';
+const ARTIFACT_NAME = "store-review-cache";
+const CACHE_FILE = "versions.json";
 
 export class VersionCacheManager {
+  private artifactClient: DefaultArtifactClient;
   private octokit;
   private owner: string;
   private repo: string;
+  private token: string;
 
   constructor() {
-    const token = process.env.GITHUB_TOKEN || core.getInput('github-token');
-    this.octokit = github.getOctokit(token);
+    this.token = process.env.GITHUB_TOKEN || core.getInput("github-token");
+    this.octokit = github.getOctokit(this.token);
     this.owner = github.context.repo.owner;
     this.repo = github.context.repo.repo;
+    this.artifactClient = new DefaultArtifactClient();
   }
 
   async loadPreviousVersions(): Promise<VersionCache | null> {
     try {
-      core.info('Loading previous version cache from cache branch...');
+      core.info("Loading previous version cache from artifacts...");
 
-      const { data } = await this.octokit.rest.repos.getContent({
-        owner: this.owner,
-        repo: this.repo,
-        path: CACHE_FILE_PATH,
-        ref: CACHE_BRANCH,
-      });
-
-      if ('content' in data) {
-        const content = Buffer.from(data.content, 'base64').toString('utf-8');
-        const versionCache = JSON.parse(content) as VersionCache;
-        core.info(`Loaded previous versions: ${JSON.stringify(versionCache)}`);
-        return versionCache;
+      const latestArtifact = await this.findLatestArtifact();
+      if (!latestArtifact) {
+        core.info("No previous cache artifact found (first run)");
+        return null;
       }
 
-      core.info('Cache file found but no content');
-      return null;
+      const tempDir = path.join(
+        process.env.RUNNER_TEMP || "/tmp",
+        "cache-download",
+      );
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      const downloadResponse = await this.artifactClient.downloadArtifact(
+        latestArtifact.id,
+        {
+          path: tempDir,
+          findBy: {
+            token: this.token,
+            workflowRunId: latestArtifact.workflowRunId,
+            repositoryOwner: this.owner,
+            repositoryName: this.repo,
+          },
+        },
+      );
+
+      const filePath = path.join(
+        downloadResponse.downloadPath || tempDir,
+        CACHE_FILE,
+      );
+
+      if (!fs.existsSync(filePath)) {
+        core.info("Cache file not found in artifact");
+        return null;
+      }
+
+      const content = fs.readFileSync(filePath, "utf-8");
+      const versionCache = JSON.parse(content) as VersionCache;
+      core.info(`Loaded previous versions: ${JSON.stringify(versionCache)}`);
+      return versionCache;
     } catch (error) {
-      if (error instanceof Error && 'status' in error && (error as { status: number }).status === 404) {
-        core.info('No previous cache found (first run)');
-      } else {
-        core.warning(`Failed to load previous versions: ${error}`);
-      }
+      core.warning(`Failed to load previous versions: ${error}`);
       return null;
     }
   }
 
   async saveCurrentVersions(versionCache: VersionCache): Promise<void> {
     try {
-      core.info('Saving current version cache to cache branch...');
+      core.info("Saving current version cache as artifact...");
 
-      const content = Buffer.from(
-        JSON.stringify(versionCache, null, 2)
-      ).toString('base64');
+      const tempDir = path.join(
+        process.env.RUNNER_TEMP || "/tmp",
+        "cache-upload",
+      );
+      fs.mkdirSync(tempDir, { recursive: true });
 
-      // Ensure cache branch exists
-      await this.ensureCacheBranch();
+      const filePath = path.join(tempDir, CACHE_FILE);
+      fs.writeFileSync(filePath, JSON.stringify(versionCache, null, 2));
 
-      // Check if file already exists to get its SHA
-      let fileSha: string | undefined;
-      try {
-        const { data } = await this.octokit.rest.repos.getContent({
-          owner: this.owner,
-          repo: this.repo,
-          path: CACHE_FILE_PATH,
-          ref: CACHE_BRANCH,
-        });
-        if ('sha' in data) {
-          fileSha = data.sha;
-        }
-      } catch {
-        // File doesn't exist yet
-      }
+      await this.artifactClient.uploadArtifact(
+        ARTIFACT_NAME,
+        [filePath],
+        tempDir,
+        { retentionDays: 90 },
+      );
 
-      await this.octokit.rest.repos.createOrUpdateFileContents({
-        owner: this.owner,
-        repo: this.repo,
-        path: CACHE_FILE_PATH,
-        message: `chore: update store review cache [skip ci]`,
-        content,
-        branch: CACHE_BRANCH,
-        ...(fileSha ? { sha: fileSha } : {}),
-      });
-
-      core.info('Cache saved successfully');
+      core.info("Cache saved successfully as artifact");
     } catch (error) {
       core.warning(`Failed to save current versions: ${error}`);
     }
   }
 
-  private async ensureCacheBranch(): Promise<void> {
+  private async findLatestArtifact(): Promise<{
+    id: number;
+    workflowRunId: number;
+  } | null> {
     try {
-      await this.octokit.rest.repos.getBranch({
+      const { data } = await this.octokit.rest.actions.listArtifactsForRepo({
         owner: this.owner,
         repo: this.repo,
-        branch: CACHE_BRANCH,
+        name: ARTIFACT_NAME,
+        per_page: 1,
       });
-    } catch (error) {
-      if (error instanceof Error && 'status' in error && (error as { status: number }).status === 404) {
-        core.info(`Creating cache branch: ${CACHE_BRANCH}`);
 
-        // Get default branch SHA
-        const { data: ref } = await this.octokit.rest.git.getRef({
-          owner: this.owner,
-          repo: this.repo,
-          ref: `heads/${github.context.ref.replace('refs/heads/', '')}`,
-        });
-
-        await this.octokit.rest.git.createRef({
-          owner: this.owner,
-          repo: this.repo,
-          ref: `refs/heads/${CACHE_BRANCH}`,
-          sha: ref.object.sha,
-        });
-
-        core.info(`Cache branch created: ${CACHE_BRANCH}`);
-      } else {
-        throw error;
+      if (data.total_count === 0 || data.artifacts.length === 0) {
+        return null;
       }
+
+      const latest = data.artifacts[0];
+      return {
+        id: latest.id,
+        workflowRunId: latest.workflow_run?.id ?? 0,
+      };
+    } catch (error) {
+      core.warning(`Failed to find latest artifact: ${error}`);
+      return null;
     }
   }
 
   hasVersionOrBuildChanged(
-    platform: 'appStore' | 'googlePlay',
+    platform: "appStore" | "googlePlay",
     currentVersion: string | number,
     previousCache: VersionCache | null,
-    currentBuild?: string | number
+    currentBuild?: string | number,
   ): boolean {
     if (!previousCache) {
       core.info(`No previous cache found for ${platform}, treating as changed`);
@@ -154,18 +157,19 @@ export class VersionCacheManager {
       return true;
     }
 
-    if (platform === 'appStore' && 'version' in previousData) {
+    if (platform === "appStore" && "version" in previousData) {
       const versionChanged = previousData.version !== currentVersion;
-      const buildChanged = currentBuild !== undefined && previousData.buildNumber !== currentBuild;
+      const buildChanged =
+        currentBuild !== undefined && previousData.buildNumber !== currentBuild;
       const changed = versionChanged || buildChanged;
       core.info(
-        `App Store comparison: v${previousData.version}(${previousData.buildNumber}) vs v${currentVersion}(${currentBuild}) - Changed: ${changed}`
+        `App Store comparison: v${previousData.version}(${previousData.buildNumber}) vs v${currentVersion}(${currentBuild}) - Changed: ${changed}`,
       );
       return changed;
-    } else if (platform === 'googlePlay' && 'versionCode' in previousData) {
+    } else if (platform === "googlePlay" && "versionCode" in previousData) {
       const versionChanged = previousData.versionCode !== currentVersion;
       core.info(
-        `Google Play version comparison: ${previousData.versionCode} vs ${currentVersion} - Changed: ${versionChanged}`
+        `Google Play version comparison: ${previousData.versionCode} vs ${currentVersion} - Changed: ${versionChanged}`,
       );
       return versionChanged;
     }
@@ -174,9 +178,9 @@ export class VersionCacheManager {
   }
 
   hasRecoveredFromRejection(
-    platform: 'appStore' | 'googlePlay',
+    platform: "appStore" | "googlePlay",
     currentStatus: string,
-    previousCache: VersionCache | null
+    previousCache: VersionCache | null,
   ): boolean {
     if (!previousCache) {
       return false;
@@ -190,19 +194,44 @@ export class VersionCacheManager {
     const previousStatus = previousData.status.toLowerCase();
     const currentStatusLower = currentStatus.toLowerCase();
 
-    const wasRejected = previousStatus.includes('rejected');
+    const wasRejected = previousStatus.includes("rejected");
 
     const isApproved =
-      currentStatusLower.includes('ready_for_sale') ||
-      currentStatusLower.includes('pending_developer_release') ||
-      currentStatusLower.includes('pending_apple_release') ||
-      currentStatusLower.includes('completed');
+      currentStatusLower.includes("ready_for_sale") ||
+      currentStatusLower.includes("pending_developer_release") ||
+      currentStatusLower.includes("pending_apple_release") ||
+      currentStatusLower.includes("completed");
 
     const recovered = wasRejected && isApproved;
     if (recovered) {
-      core.info(`${platform} recovered from rejection: ${previousStatus} -> ${currentStatus}`);
+      core.info(
+        `${platform} recovered from rejection: ${previousStatus} -> ${currentStatus}`,
+      );
     }
 
     return recovered;
+  }
+
+  hasCacheChanged(
+    currentCache: VersionCache,
+    previousCache: VersionCache | null,
+  ): boolean {
+    if (!previousCache) {
+      return true;
+    }
+
+    const currentWithoutTimestamp = {
+      appStore: currentCache.appStore,
+      googlePlay: currentCache.googlePlay,
+    };
+    const previousWithoutTimestamp = {
+      appStore: previousCache.appStore,
+      googlePlay: previousCache.googlePlay,
+    };
+
+    return (
+      JSON.stringify(currentWithoutTimestamp) !==
+      JSON.stringify(previousWithoutTimestamp)
+    );
   }
 }
