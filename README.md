@@ -78,7 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Monitor App Store
-        uses: anies1212/store-review-monitor@v1.5.0
+        uses: anies1212/store-review-monitor@v1.5.1
         with:
           app-store-issuer-id: ${{ secrets.APP_STORE_ISSUER_ID }}
           app-store-key-id: ${{ secrets.APP_STORE_KEY_ID }}
@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Monitor Google Play
-        uses: anies1212/store-review-monitor@v1.5.0
+        uses: anies1212/store-review-monitor@v1.5.1
         with:
           google-play-package-name: com.example.myapp
           google-play-service-account: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT }}
@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Monitor App Store and Google Play
-        uses: anies1212/store-review-monitor@v1.5.0
+        uses: anies1212/store-review-monitor@v1.5.1
         with:
           # App Store Connect
           app-store-issuer-id: ${{ secrets.APP_STORE_ISSUER_ID }}
@@ -157,7 +157,7 @@ jobs:
     steps:
       - name: Monitor Store Reviews
         id: monitor
-        uses: anies1212/store-review-monitor@v1.5.0
+        uses: anies1212/store-review-monitor@v1.5.1
         with:
           app-store-issuer-id: ${{ secrets.APP_STORE_ISSUER_ID }}
           app-store-key-id: ${{ secrets.APP_STORE_KEY_ID }}

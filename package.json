@@ -1,6 +1,6 @@
 {
   "name": "store-review-monitor",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "GitHub Action to monitor App Store Connect and Google Play Console review status and notify via Slack",
   "main": "dist/index.js",
   "scripts": {
