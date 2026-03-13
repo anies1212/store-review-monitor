@@ -24,7 +24,7 @@ export class AppStoreConnectMonitor {
         }
       );
 
-      // Get app store versions (sort not supported, fetch multiple and pick latest)
+      // Get app store versions with build relationship included
       const versionsResponse = await axios.get(
         `${this.baseURL}/apps/${this.config.appId}/appStoreVersions`,
         {
@@ -33,6 +33,7 @@ export class AppStoreConnectMonitor {
           },
           params: {
             'filter[platform]': 'IOS',
+            'include': 'build',
           },
         }
       );
@@ -51,23 +52,18 @@ export class AppStoreConnectMonitor {
       const status = latestVersion.attributes.appStoreState as AppStoreReviewStatus;
       const version = latestVersion.attributes.versionString;
 
-      // Get the build number from the build relationship
+      // Get the build number from the included data
       let buildNumber: string | undefined;
-      try {
-        const buildRelationship = latestVersion.relationships?.build?.data;
-        if (buildRelationship?.id) {
-          const buildResponse = await axios.get(
-            `${this.baseURL}/builds/${buildRelationship.id}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-          buildNumber = buildResponse.data.data?.attributes?.version;
+      const buildRelationship = latestVersion.relationships?.build?.data;
+      if (buildRelationship?.id) {
+        // Find the build in the included array
+        const includedBuild = versionsResponse.data.included?.find(
+          (item: { type: string; id: string }) =>
+            item.type === 'builds' && item.id === buildRelationship.id
+        );
+        if (includedBuild?.attributes?.version) {
+          buildNumber = includedBuild.attributes.version;
         }
-      } catch (error) {
-        console.warn('Failed to fetch build number:', error);
       }
 
       return {
