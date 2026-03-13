@@ -97558,13 +97558,14 @@ class AppStoreConnectMonitor {
                     Authorization: `Bearer ${token}`,
                 },
             });
-            // Get app store versions (sort not supported, fetch multiple and pick latest)
+            // Get app store versions with build relationship included
             const versionsResponse = await axios_1.default.get(`${this.baseURL}/apps/${this.config.appId}/appStoreVersions`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
                 params: {
                     'filter[platform]': 'IOS',
+                    'include': 'build',
                 },
             });
             if (!versionsResponse.data.data || versionsResponse.data.data.length === 0) {
@@ -97576,21 +97577,15 @@ class AppStoreConnectMonitor {
             const latestVersion = versions[0];
             const status = latestVersion.attributes.appStoreState;
             const version = latestVersion.attributes.versionString;
-            // Get the build number from the build relationship
+            // Get the build number from the included data
             let buildNumber;
-            try {
-                const buildRelationship = latestVersion.relationships?.build?.data;
-                if (buildRelationship?.id) {
-                    const buildResponse = await axios_1.default.get(`${this.baseURL}/builds/${buildRelationship.id}`, {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    });
-                    buildNumber = buildResponse.data.data?.attributes?.version;
+            const buildRelationship = latestVersion.relationships?.build?.data;
+            if (buildRelationship?.id) {
+                // Find the build in the included array
+                const includedBuild = versionsResponse.data.included?.find((item) => item.type === 'builds' && item.id === buildRelationship.id);
+                if (includedBuild?.attributes?.version) {
+                    buildNumber = includedBuild.attributes.version;
                 }
-            }
-            catch (error) {
-                console.warn('Failed to fetch build number:', error);
             }
             return {
                 appId: this.config.appId,
